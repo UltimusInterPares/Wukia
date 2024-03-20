@@ -1,0 +1,137 @@
+% arara: pdflatex
+% arara: biber
+% arara: pdflatex
+% arara: pdflatex
+
+\documentclass[12pt, notitlepage, twoside]{report}
+
+% Document Metafiles (Do Not Reorder!) ===================================== %
+\input{metafiles/preamble.tex}
+\input{metafiles/booleans.tex}
+\input{metafiles/structure.tex}
+
+
+% Document Structure Options =============================================== %
+%\sidenotetrue
+\sidenotefalse
+\figurestrue
+% \figuresfalse
+\tablestrue
+% \tablesfalse
+
+% If you want sidenotes, we'll load some additional packages. Nothing for you to worry about.
+\input{metafiles/sidenotes.tex}
+
+\begin{document}
+
+
+
+% Title and Author Settings ================================================ %
+\newcommand{\doctitle}{Your Dissertation Title Will Go Here}
+\newcommand{\docauthor}{Thomas W.  Broadwater}
+
+
+%--------------------------ABSTRACT---------------------------%
+\input{metafiles/abstractpage.tex}
+\makeabstract{%
+This section of the page is where your abstract will go. Fill in this spot in the dissertation.tex file with your abstract. Doctoral 350 words max, 150 max for masters.
+}%
+
+
+%--------------------------TITLE PAGE---------------------------%
+\input{metafiles/titlepage.tex}
+\newcommand{\degreesearned}{%
+B.S., University of Georgia, 2018\\
+  Enter only degrees already completed. Follow example above\\
+  If degree was obtained outside of the US, the country \\
+  of the school and date obtained will need to be provided.
+}%
+
+\newcommand{\degreetype}{Thesis}
+\newcommand{\degreetitle}{Master}
+\newcommand{\degreename}{Classical Languages}
+\newcommand{\degreeyear}{2023}
+\maketitlepage
+
+
+%--------------------------COPYRIGHT---------------------------%
+\input{metafiles/copyright.tex}
+\makecopyright{2020}
+
+
+%--------------------------APPROVAL---------------------------%
+\newpage
+\thispagestyle{empty}
+\vspace*{18pt}
+\begin{center}
+  \textsc{\doctitle}\\[18pt]
+  by\\[18pt]
+  \textsc{\docauthor}
+\end{center}
+\vfill
+
+\begin{flushright}
+  \begin{tabular}{ll}
+    Major Professor: & Major Prof \\ [8pt]
+    Committee: & Prof 1 \\
+    & Prof 2 \\
+    & Prof 3 \\
+  \end{tabular}
+\end{flushright}
+
+\vspace*{3cm}
+
+\begin{flushleft}
+  Electronic Version Approved:\\[12pt]
+  Ron Walcott\\
+  Dean of the Graduate School\\
+  The University of Georgia\\
+  Month Year
+\end{flushleft}
+\vspace*{1.5cm}
+
+% Dedication ============================================================== %
+\subfile{subfiles/dedication}
+
+% Acknowledgements ======================================================== %
+\subfile{subfiles/acknowledgements}
+
+% Table of Contents ======================================================= %
+\setcounter{tocdepth}{1}
+\tableofcontents
+
+\iffigures
+\addcontentsline{toc}{chapter}{\listfigurename}
+\listoffigures
+\fi
+
+\iftables
+\addcontentsline{toc}{chapter}{\listtablename}
+\listoftables
+\fi
+
+\clearpage
+\pagenumbering{arabic}
+
+% Document Body =========================================================== %
+% ------------------------------------------------------------------------- %
+\subfile{subfiles/chapter1}
+\subfile{subfiles/chapter2}
+\subfile{subfiles/chapter3}
+\subfile{subfiles/chapter4}
+\subfile{subfiles/conclusion}
+% ------------------------------------------------------------------------- %
+% ========================================================================= %
+
+
+%-----------------------APPENDICES----------------------------%
+\begin{appendices}
+  \subfile{subfiles/appendices}
+\end{appendices}
+
+%-----------------------BIBLIOGRAPHY---------------------------%
+\newpage
+\addcontentsline{toc}{chapter}{Bibliography} %add bib to the TOC
+\printbibliography[title={Bibliography}]
+
+\end{document}
