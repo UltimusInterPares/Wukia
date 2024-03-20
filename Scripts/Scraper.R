@@ -1,0 +1,572 @@
+### STYLE GUIDE -----------------------------------------------------------
+#
+# All function names are in CamelCase
+# All variable names are lowercase_with_underscores
+#
+# Var.'s
+# phi_no
+# link
+# page
+# header
+# cities
+# cen_start
+# cen_end
+# date_after
+# date_before
+# text
+# ig_book
+# ig_no
+
+### PACKAGES --------------------------------------------------------------
+library(dplyr)    # . . . . . . . . . . . . . . . .  For %>%, filter(), etc
+library(stringr)  # . . . . . . . . . . . . . . . . . . .  For str_detect()
+library(rvest)    # . . . . . . . . . . . . . . . . . .  Web Scraping Tools
+library(ggplot2)  # . . . . . . . . . . . . . . . . . . Data visualization
+library(progress) # . . . . . . . . . . . . . . . . . . . For progress bars
+library(stringi)  # . . . . . . . . . For getting UTF8 codes out of char.'s
+library(tidytext) # . . . . For unnest_tokens() and other text manipulation
+library(readr)    # . . . . . . . . . . . . . . . . . . . .  For read_csv()
+
+### DEFINING COMPONENTS FOR Scrape() --------------------------------------
+
+# Make page object from PHI link
+# Link generated iteratively with static base + PHI number
+MakePage <- function(phi_no) {
+  link <-
+    paste('https://inscriptions.packhum.org/text/', phi_no, sep = "")
+  page <- read_html(link)
+  return(page)
+}
+
+# Read main body of text out of page
+ReadText <- function(page) {
+  text <-
+    page %>% html_nodes('div.greek.text-nowrap.dblclk') %>% html_text()
+  return(text)
+}
+
+# Clean text of editorial marks
+CleanText <- function(text) {
+  #text <- gsub("[\\d\\[\\]]", "", text, perl = T)
+  
+  # Removes numbers except for those in Oropus cross-listings
+  text <- gsub("(?<!Oropou, no\\. )(\\d+)(?!(\\.|\\d))", "", text, perl = T)
+  
+  # Remove reconstructed writing in square brackets [ ]
+  # First, capture any writing between closed brackets
+  # (?<=\\[)  : Look behind for an opening square bracket
+  # [^\\[\\]\\n] : Capture any character except for a square bracket or
+  # a line break (necessary so that the line does not capture fragmented
+  # text on the edge of the inscription medium)
+  # +         : Do so for one or more character(s)
+  # (?=\\])   : Look ahead for a closing square bracket
+  text <- gsub("(?<=\\[)[^\\[\\]\\n]+(?=\\])", "...", text, perl = T)
+  
+  # Second, capture any writing at the end of a line after an opening [
+  text <- gsub("(?<=\\[)[^\\[\\]\\n]+", "...", text, perl = T)
+  
+  # Finally, any writing at the beginning of a line before an opening ]
+  text <- gsub("[^\\[\\]\\n]+(?=\\])", "...", text, perl = T)
+  
+
+  # Removes angled brackets
+  text <- gsub("[<>]", "", text, perl = T)
+  
+  # Removes dashes followed by a new line
+  # IE correct words split across two lines
+  text <- gsub("(\\-\\n{1,})", "", text, perl = T)
+  
+  # Captures new lines, replaces with spaces
+  text <- gsub("\\n{1,}", " ", text, perl = T)
+  
+  # Contracts multiple spaces into one space
+  text <- gsub("\\s{1,}", " ", text, perl = T)
+  
+  # Removes combining dot below
+  # ̣COMBINING DOT BELOW Unicode: U+0323, UTF-8: CC A3
+  text <- gsub("̣", "", text, perl = T)
+  
+  # Removes #
+  text <- gsub("#", "", text, perl = T)
+  
+  # Swaps the plank constant for "heta" (just h)
+  # ℎ PLANCK CONSTANT Unicode: U+210E, UTF-8: E2 84 8E
+  text <- gsub("ℎ", "h", text, perl = T)
+  
+  # Alpha Upper
+  text <- gsub("(Ἀ|Ἁ|Ά|Ὰ|Ἄ|Ἂ|Ἆ|Ἅ|Ἃ|Ἇ|Ά)",
+               "Α",
+               text,
+               ignore.case = F)
+  # Alpha Lower
+  text <- gsub("(ἀ|ἁ|ά|ὰ|ᾶ|ἄ|ἂ|ἆ|ἅ|ἃ|ἇ|ᾷ|ά)",
+               "α",
+               text,
+               ignore.case = F)
+  # Eta Upper
+  text <- gsub("(Ἠ|Ἡ|Ή|Ὴ|Ἤ|Ἢ|Ἦ|Ἥ|Ἣ|Ἧ|ῌ|ᾜ|ᾟ|Ή)",
+               "Η",
+               text,
+               ignore.case = F)
+  # Eta Lower
+  text <- gsub("(ἠ|ἡ|ή|ὴ|ῆ|ἤ|ἢ|ἦ|ἥ|ἣ|ἧ|ῃ|ῂ|ῇ|ᾔ|ᾗ|ή)",
+               "η",
+               text,
+               ignore.case = F)
+  #Iota Upper
+  text <- gsub("(Ἰ|Ἱ|Ί|Ὶ|Ἴ|Ἲ|Ἶ|Ἵ|Ἳ|Ἷ|Ί)",
+               "Ι",
+               text,
+               ignore.case = F)
+  # Iota Lower
+  text <- gsub("(ἰ|ἱ|ί|ὶ|ῖ|ἴ|ἲ|ἶ|ἵ|ἳ|ἷ|ί)",
+               "ι",
+               text,
+               ignore.case = F)
+  # Iota Diaeresis Upper
+  text <- gsub("(Ϊ)",
+               "Ι",
+               text,
+               ignore.case = F)
+  # Iota Diaeresis Lower
+  text <- gsub("(ϊ|ΐ|ῒ|ΐ)",
+               "ι",
+               text,
+               ignore.case = F)
+  # Omega Upper
+  text <- gsub("(Ὠ|Ὡ|Ώ|Ὼ|Ὤ|Ὢ|Ὦ|Ὥ|Ὣ|Ὧ|ῼ|ᾬ|ᾯ|ᾨ|Ώ)",
+               "Ω",
+               text,
+               ignore.case = F)
+  # Omega Lower
+  text <- gsub("(ὠ|ὡ|ώ|ὼ|ῶ|ὤ|ὢ|ὦ|ὥ|ὣ|ὧ|ῳ|ῷ|ᾤ|ᾧ|ᾠ|ῴ|ώ)",
+               "ω",
+               text,
+               ignore.case = F)
+  # Upsilon Upper
+  text <- gsub("(Ὑ|Ύ|Ὺ|Ὕ|Ὓ|Ὗ)",
+               "Υ",
+               text,
+               ignore.case = F)
+  # Upsilon Lower
+  text <- gsub("(ὐ|ὑ|ύ|ὺ|ῦ|ὔ|ὒ|ὖ|ὕ|ὓ|ὗ)",
+               "υ",
+               text,
+               ignore.case = F)
+  # Upsilon Diaeresis Upper
+  text <- gsub("(Ϋ|Ύ|Ϋ)",
+               "Υ",
+               text,
+               ignore.case = F)
+  # Upsilon Diaeresis Lower
+  text <- gsub("(ΰ|ῢ|ϋ|ύ|ϋ)",
+               "υ",
+               text,
+               ignore.case = F)
+  # Epsilon Upper
+  text <- gsub("(Ἐ|Ἑ|Έ|Ὲ|Ἔ|Ἒ|Ἕ|Ἓ|Έ)",
+               "Ε",
+               text,
+               ignore.case = F)
+  # Epsilon Lower
+  text <- gsub("(ἐ|ἑ|έ|ὲ|ἔ|ἒ|ἕ|ἓ|έ)",
+               "ε",
+               text,
+               ignore.case = F)
+  # Omicron Upper
+  text <- gsub("(Ὀ|Ὁ|Ό|Ὸ|Ὄ|Ὂ|Ὅ|Ὃ|Ό)",
+               "Ο",
+               text,
+               ignore.case = F)
+  # Omicron Lower
+  text <- gsub("(ὀ|ὁ|ό|ὸ|ὄ|ὂ|ὅ|ὃ|ό)",
+               "ο",
+               text,
+               ignore.case = F)
+  # Rho Upper
+  text <- gsub("(Ῥ)",
+               "Ρ",
+               text,
+               ignore.case = F)
+  # Rho Lower
+  text <- gsub("(ῤ|ῥ)",
+               "ρ",
+               text,
+               ignore.case = F)
+  return(text)
+}
+
+# Read IG book out of page
+ReadBook <- function(page) {
+  ig_book <- page %>% html_nodes("span.fullref > a") %>% html_text()
+  ig_book <- gsub("\\n", "", ig_book)
+  return(ig_book)
+}
+
+# Read inscription number within IG book out of page
+ReadNo <- function(page) {
+  ig_no <- page %>% html_nodes("span.fullref > span") %>% html_text()
+  #ig_no < gsub("\\n", "", ig_no)
+  return(ig_no)
+}
+
+# Read remaining header data out of page
+ReadHeader <- function(page) {
+  header <- page %>% html_nodes('div.tildeinfo.light') %>% html_text()
+  return(header)
+}
+
+# Clean header of editorial marks
+## UPDATE NEEDED: SOME SUBSTITUTIONS FIT BETTER IN CleanDates
+CleanHeader <- function(header) {
+  header <- gsub("[\\[\\]]", "", header, perl = T)
+  header <- gsub("(\\-\\n{1,})", "", header, perl = T)
+  header <- gsub("\\n{1,}", " ", header, perl = T)
+  header <- gsub("\\s{1,}", " ", header, perl = T)
+  # ̣COMBINING DOT BELOW Unicode: U+0323, UTF-8: CC A3
+  header <- gsub("̣", "", header, perl = T)
+  header <- gsub("#", "", header, perl = T)
+  # ℎ PLANCK CONSTANT Unicode: U+210E, UTF-8: E2 84 8E
+  header <- gsub("ℎ", "h", header, perl = T)
+  # Remove question marks
+  header <- gsub("\\?", "", header, perl = T)
+  
+  # not bef. > after
+  header <- gsub("not bef.", "after", header, perl = T)
+  
+  # remove stoichedon data! It's interfering with the dates
+  header <-
+    gsub("(quasi-|non-|)stoich. \\d+-\\d+", "", header, perl = T)
+  header <- gsub("(quasi-|non-|)stoich. \\d+", "", header, perl = T)
+  return(header)
+}
+
+# Convert Roman Numerals into a format readable by TranslateCentury()
+TranslateRomanNumeral <- function(header) {
+  # Expand abbreviation "s." to "saeculum"
+  header <- gsub(
+    "s\\.(?=\\s{1}(I|V))",
+    "saeculum",
+    header,
+    ignore.case=FALSE,
+    perl=TRUE
+  )
+  
+  # Swap Latin abbreviation "med." to English "mid"
+  header <- gsub(
+    "med\\.",
+    "mid",
+    header,
+    ignore.case=FALSE,
+    perl=TRUE
+  )
+  
+  # Extract Roman Numeral after "saeculum" and before "a."
+  # UPDATE SEP 10: PUT \\w{1,4} IN CAPTURE GROUP
+  R <- str_extract(
+    header,
+    "(?<=saeculum\\s{1})(\\w{1,4})(?=\\s{1}a\\.)"
+  )
+  
+  # Translate Roman Numeral to Arabic Numeral
+  N <- as.roman(R) %>% as.numeric()
+  
+  # Substitute original Roman Numeral with new Arabic Numeral `N`
+  # UPDATE SEP 10: PUT \\w{1,4} IN CAPTURE GROUP
+  header <- gsub(
+    "(?<=saeculum\\s{1})(\\w{1,4})(?=\\s{1}a\\.)",
+    N,
+    header,
+    ignore.case=FALSE,
+    perl=TRUE
+  )
+  
+  # Translate "saeculum N a." to "nth c. a."
+  # First three lines for specific suffixes 'st, 'nd, and 'rd
+  # as used after 1, 2, and 3
+  
+  # 1st c. a.
+  header <- gsub(
+    "saeculum 1 a.",
+    "1st c. a.",
+    header)
+  
+  # 2nd c. a.
+  header <- gsub(
+    "saeculum 2 a.",
+    "2nd c. a.",
+    header)
+  
+  # 3rd c. a.
+  header <- gsub(
+    "saeculum 3 a.",
+    "3rd c. a.",
+    header)
+  
+  # Nth. c. a.
+  header <- gsub(
+    "saeculum (\\d{1}) a.",
+    "\\1th c. a.",
+    header)
+  
+  return(header)
+}
+
+# Translate century format to date format
+## UPDATE 09/09/22 : JUST CORRECTED EVERY INSTANCE OF c.
+## ADDED ESCAPE => c\\.
+## SAME DAY: REMOVED FOR TESTING
+TranslateCentury <- function(header) {
+  if (grepl("(\\d+)(?=\\w{2} c\\.)", header, perl = T)) {
+    cen_start <- str_extract(header, "(\\d+)(?=\\w{2} c\\.)")
+    cen_start <- paste(cen_start, "00", sep = "") %>%
+      as.integer()
+    
+    cen_end <- cen_start - 99
+    
+    if (grepl("(?<=early )(\\d+)(?=\\w{2} c\\.)", header, perl = T)) {
+      header <-
+        gsub("(?>early|mid|late) (\\d+)(?>\\w{2} c\\.)",
+             cen_start,
+             header,
+             perl = T)
+      return(header)
+    } else if (grepl("(?<=late )(\\d+)(?=\\w{2} c\\.)", header, perl = T)) {
+      cen_start <- cen_start - 99
+      header <-
+        gsub("(?>early|mid|late) (\\d+)(?>\\w{2} c\\.)",
+             cen_start,
+             header,
+             perl = T)
+      return(header)
+      #return(cen_start)
+    } else if (grepl("(?<=mid )(\\d+)(?=\\w{2} c\\.)", header, perl = T)) {
+      cen_start <- cen_start - 50
+      header <-
+        gsub("(?>early|mid|late) (\\d+)(?>\\w{2} c\\.)",
+             cen_start,
+             header,
+             perl = T)
+      return(header)
+      #return(cen_start)
+    } else {
+      cen <- paste(cen_start, cen_end, sep = "-")
+      header <- gsub("(\\d+)(?>\\w{2} c\\.)", cen, header, perl = T)
+      return(header)
+    }
+  } else {
+    return(header)
+  }
+  
+}
+
+# Standardize date format
+CleanDates <- function(header) {
+  header <- gsub("ante",
+                 "before",
+                 header,
+                 ignore.case = T,
+                 perl = T)
+  header <- gsub("post",
+                 "after",
+                 header,
+                 ignore.case = T,
+                 perl = T)
+  
+  # Standardize c. and ca.
+  header <-
+    gsub("\\s{1}c\\.",
+         " ca\\.",
+         header,
+         ignore.case = T,
+         perl = T)
+  
+  # Standardize a. "ante (Christum natum)" to BC
+  header <-
+    gsub("\\s{1}a\\.",
+         " BC",
+         header,
+         ignore.case = T,
+         perl = T)
+  
+  # Fixing slashes (hopefully once and for all)
+  
+  # DDD/DD -> DDD-DDD
+  header <- gsub("(\\d)(\\d)(\\d)/(\\d)(\\d)",
+                 "\\1\\2\\3-\\1\\4\\5",
+                 header,
+                 perl = T)
+  
+  # DDD/D -> DDD-DDD
+  header <- gsub("(\\d)(\\d)(\\d)/(\\d)",
+                 "\\1\\2\\3-\\1\\2\\4",
+                 header,
+                 perl = T)
+  
+  # DDD-DDD-DDD-DDD (from DDD/D-DDD/D) -> DDD-DDD
+  header <- gsub("(\\d{3})-\\d{3}-\\d{3}-(\\d{3})",
+                 "\\1-\\2",
+                 header,
+                 perl = T)
+  
+  return(header)
+}
+
+# Grab TPQ
+### UPDATE 9/13/22: CHANGE DDD-DDD FORMAT
+### \\d+-\\d+ -> (?<![\\.\\,\\d\\(])\\d{1,3}-\\d{1,3} (in if statement)
+### \\d+(?=-) -> (?<![\\.\\,\\d\\(])\\d{1,3}(?=-)     (in capture group)
+ReadDateAfter <- function(header) {
+  if (grepl("(?<![\\.\\,\\d\\(])\\d{1,3}-\\d{1,3}", header, perl = T)) {  #
+    # DDD-DDD                                                             #
+    date_after <- str_extract(header, "(?<![\\.\\,\\d\\(\\;])\\d{1,3}(?=-)") #
+  } else if (grepl("(?<=after )\\d+", header, perl = T)) {
+    # after DDD
+    date_after <- str_extract(header, "(?<=after )\\d+")
+  }  else if (grepl("(?<=- )(\\d+)(?= BC)", header, perl = T)) {
+    # ???
+    date_after <- str_extract(header, "(?<=- )(\\d+)(?= BC)")
+  } else if (grepl("(?<=— )(\\d+)(?= BC)", header, perl = T)) {
+    # DDD BC
+    date_after <- str_extract(header, "(?<=— )(\\d+)(?= BC)")
+  } else if (grepl("(?<=ca\\. )(\\d+)(?= BC)", header, perl = T)) {
+    # ca. DDD BC
+    date_after <- str_extract(header, "(?<=ca\\. )(\\d+)(?= BC)")
+  } else {
+    date_after <- NA
+  }
+  return(date_after)
+}
+
+# Grab TAQ
+### UPDATE 9/13/22: CHANGE DDD-DDD FORMAT
+### \\d+-\\d+  -> (?<![\\.\\,\\d\\)])\\d{1,3}-\\d{1,3} (in if statement)
+### (?<=-)\\d+ -> (?<=-)\\d{1,3}(?<![\\.\\,\\d\\)])    (in capture group)
+ReadDateBefore <- function(header) {
+  if (grepl("(?<![\\.\\,\\d\\)])\\d+-\\d+", header, perl = T)) {          #
+    # DDD-DDD                                                             #
+    date_before <- str_extract(header, "(?<=-)\\d{1,3}(?![\\.\\,\\d\\\\;)])")#
+  } else if (grepl("(?<=before )\\d+", header, perl = T)) {
+    # before TTT
+    date_before <- str_extract(header, "(?<=before )\\d+")
+  } else if (grepl("(?<=- )(\\d+)(?= BC)", header, perl = T)) {
+    # ???
+    date_before <- str_extract(header, "(?<=- )(\\d+)(?= BC)")
+  } else if (grepl("(?<=— )(\\d+)(?= BC)", header, perl = T)) {
+    # TTT BC/AD
+    date_before <- str_extract(header, "(?<=— )(\\d+)(?= BC)")
+  } else if (grepl("(?<=ca\\. )(\\d+)(?= BC)", header, perl = T)) {
+    # ca. TTT
+    date_before <- str_extract(header, "(?<=ca\\. )(\\d+)(?= BC)")
+  } else {
+    date_before <- NA
+  }
+  return(date_before)
+}
+
+# Find target cities
+## UPDATE NEEDED: SUB DEME NAMES FOR "ATHENS" --
+## DON'T INCLUDE DEMES IN TARGET LIST
+ReadLocation <- function(header) {
+  # Cities to target for
+  # Kerameikos (suburb) is added to Athens
+  # Maybe need to add Halai Aix. (Halai Aixonides)
+  # Maybe need to add Rhamnous
+  cities <-
+    "(Megara|Pagai|Aigosthena|Oropus|Tanagra|Eleusis|Athens|Kerameikos)"
+  
+  # Expand Ath. to Athens
+  header <- gsub("Ath.",
+                 "Athens",
+                 header,
+                 ignore.case = T,
+                 perl = T)
+  
+  location <- str_extract(header, cities)
+  
+  return(location)
+}
+
+# Take outputs returned from all the above and create a vector "entry"
+MakeEntry <-
+  function(ig_book,
+           ig_no,
+           phi_no,
+           header,
+           location,
+           date_after,
+           date_before,
+           text) {
+    entry <-
+      c(ig_book,
+        ig_no,
+        phi_no,
+        header,
+        location,
+        date_after,
+        date_before,
+        text)
+    return(as.list(entry))
+  }
+
+### Scrape() --------------------------------------------------------------
+Scrape <- function(phi_no = 1) {
+  # Make page for scraping
+  page <- MakePage(phi_no)
+  
+  # Scrape relevant data
+  text <- ReadText(page)
+  
+  # Check for test length
+  # If text length > 0, then there is actually an inscription to use
+  # Otherwise, the PHI number is empty, and NAs are substituted
+  if (length(text) > 0) {
+    text <- CleanText(text)
+    
+    # Scrape identifying materials
+    ig_book <- ReadBook(page)
+    ig_no <- ReadNo(page)
+    
+    # Location and Dates
+    header <- ReadHeader(page)
+    header <- CleanHeader(header)
+    header <- TranslateRomanNumeral(header)
+    header <- TranslateCentury(header)
+    header <- CleanDates(header)
+    date_after <- ReadDateAfter(header)
+    date_before <- ReadDateBefore(header)
+    location <- ReadLocation(header)
+    
+    # Fast swap for unmodified header
+    header <- ReadHeader(page)
+    
+    entry <- MakeEntry(ig_book,
+                       ig_no,
+                       phi_no,
+                       header,
+                       location,
+                       date_after,
+                       date_before,
+                       text)
+  } else {
+    ig_book = NA
+    ig_no = NA
+    phi_no = NA
+    header = NA
+    location = NA
+    date_after = NA
+    date_before = NA
+    text = NA
+    
+    entry <- MakeEntry(ig_book,
+                       ig_no,
+                       phi_no,
+                       header,
+                       location,
+                       date_after,
+                       date_before,
+                       text)
+  }
+  
+  return(entry)
+}
